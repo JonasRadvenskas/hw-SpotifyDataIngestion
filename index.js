@@ -39,6 +39,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var fs = require("fs");
 var csv_parse_1 = require("csv-parse");
 var pg_1 = require("pg");
+var createTables = fs.readFileSync('./create-tables.sql', { encoding: 'utf-8' });
+console.log(createTables);
+var createViews = fs.readFileSync('./create-views.sql', { encoding: 'utf-8' });
+console.log(createViews);
 var tracksFilePath = 'data/tracks.csv';
 var artistsFilePath = 'data/artists.csv';
 var fileContent = fs.readFileSync(tracksFilePath, { encoding: 'utf-8' });
@@ -169,11 +173,15 @@ var fileContent = fs.readFileSync(tracksFilePath, { encoding: 'utf-8' });
                     }
                     console.log("Artists:", artists.length);
                     // Insert the data into the PostgreSQL database
-                    //await insertArtists(artists);
-                    return [4 /*yield*/, insertTracks(tracks)];
+                    return [4 /*yield*/, prepareDatabase()];
                 case 1:
                     // Insert the data into the PostgreSQL database
-                    //await insertArtists(artists);
+                    _a.sent();
+                    return [4 /*yield*/, insertArtists(artists)];
+                case 2:
+                    _a.sent();
+                    return [4 /*yield*/, insertTracks(tracks)];
+                case 3:
                     _a.sent();
                     return [2 /*return*/];
             }
@@ -194,6 +202,43 @@ function connectPostgreSQL() {
     catch (err) {
         console.error('Error creating client:', err);
     }
+}
+function prepareDatabase() {
+    return __awaiter(this, void 0, void 0, function () {
+        var client, err_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    client = connectPostgreSQL();
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 5, 6, 8]);
+                    return [4 /*yield*/, client.connect()];
+                case 2:
+                    _a.sent();
+                    // Create tables
+                    return [4 /*yield*/, client.query(createTables)];
+                case 3:
+                    // Create tables
+                    _a.sent();
+                    // Create views
+                    return [4 /*yield*/, client.query(createViews)];
+                case 4:
+                    // Create views
+                    _a.sent();
+                    return [3 /*break*/, 8];
+                case 5:
+                    err_1 = _a.sent();
+                    console.error('Error preparing database:', err_1);
+                    return [3 /*break*/, 8];
+                case 6: return [4 /*yield*/, client.end()];
+                case 7:
+                    _a.sent();
+                    return [7 /*endfinally*/];
+                case 8: return [2 /*return*/];
+            }
+        });
+    });
 }
 function buildIntermediateInsert(table, keyVal, dataArr) {
     try {
@@ -234,7 +279,7 @@ function buildIntermediateInsert(table, keyVal, dataArr) {
 }
 function insertArtists(artists) {
     return __awaiter(this, void 0, void 0, function () {
-        var client, mainInsertCount, _i, artists_1, artist, query, values, err_1;
+        var client, mainInsertCount, _i, artists_1, artist, query, values, err_2;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -268,9 +313,9 @@ function insertArtists(artists) {
                     }
                     return [3 /*break*/, 6];
                 case 3:
-                    err_1 = _a.sent();
+                    err_2 = _a.sent();
                     console.log('Err artist: ', artists[mainInsertCount]);
-                    console.error('Error inserting tracks:', err_1);
+                    console.error('Error inserting tracks:', err_2);
                     return [3 /*break*/, 6];
                 case 4: return [4 /*yield*/, client.end()];
                 case 5:
@@ -283,7 +328,7 @@ function insertArtists(artists) {
 }
 function insertTracks(tracks) {
     return __awaiter(this, void 0, void 0, function () {
-        var client, mainInsertCount, _i, tracks_1, track, query, values, err_2;
+        var client, mainInsertCount, _i, tracks_1, track, query, values, err_3;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -291,63 +336,57 @@ function insertTracks(tracks) {
                     mainInsertCount = 0;
                     _a.label = 1;
                 case 1:
-                    _a.trys.push([1, 7, 8, 10]);
+                    _a.trys.push([1, 3, 4, 6]);
                     return [4 /*yield*/, client.connect()];
                 case 2:
                     _a.sent();
                     // Clean previous data
                     //client.query(`TRUNCATE public."Tracks" RESTART IDENTITY CASCADE`);
-                    client.query("TRUNCATE public.\"TrackArtists\" RESTART IDENTITY CASCADE");
-                    _i = 0, tracks_1 = tracks;
-                    _a.label = 3;
+                    //client.query(`TRUNCATE public."TrackArtists" RESTART IDENTITY CASCADE`);
+                    // Insert tracks - Batch load would be way faster
+                    for (_i = 0, tracks_1 = tracks; _i < tracks_1.length; _i++) {
+                        track = tracks_1[_i];
+                        query = "\n                INSERT INTO public.\"Tracks\" (\n                    \"TrackId\", \n                    \"TrackName\", \n                    \"Popularity\", \n                    \"DurationMS\", \n                    \"Explicit\", \n                    \"ReleaseYear\", \n                    \"ReleaseMonth\", \n                    \"ReleaseDay\", \n                    \"Danceability\", \n                    \"Energy\", \n                    \"Key\", \n                    \"Loudness\", \n                    \"Mode\", \n                    \"Speechiness\", \n                    \"Acousticness\", \n                    \"Instrumentalness\", \n                    \"Liveness\", \n                    \"Valence\", \n                    \"Tempo\", \n                    \"TimeSignature\"\n                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9\n                    ,$10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)";
+                        values = [
+                            track.id,
+                            track.name,
+                            track.popularity,
+                            track.duration_ms,
+                            track.explicit,
+                            track.release_year,
+                            track.release_month,
+                            track.release_day,
+                            track.danceability,
+                            track.energy,
+                            track.key,
+                            track.loudness,
+                            track.mode,
+                            track.speechiness,
+                            track.acousticness,
+                            track.instrumentalness,
+                            track.liveness,
+                            track.valence,
+                            track.tempo,
+                            track.time_signature
+                        ];
+                        //await client.query(query, values);
+                        mainInsertCount++;
+                        query = buildIntermediateInsert('TrackArtists', track.id, track.id_artists);
+                        if (query != '') {
+                            //await client.query(query);
+                        }
+                    }
+                    return [3 /*break*/, 6];
                 case 3:
-                    if (!(_i < tracks_1.length)) return [3 /*break*/, 6];
-                    track = tracks_1[_i];
-                    query = "\n                INSERT INTO public.\"Tracks\" (\n                    \"TrackId\", \n                    \"TrackName\", \n                    \"Popularity\", \n                    \"DurationMS\", \n                    \"Explicit\", \n                    \"ReleaseYear\", \n                    \"ReleaseMonth\", \n                    \"ReleaseDay\", \n                    \"Danceability\", \n                    \"Energy\", \n                    \"Key\", \n                    \"Loudness\", \n                    \"Mode\", \n                    \"Speechiness\", \n                    \"Acousticness\", \n                    \"Instrumentalness\", \n                    \"Liveness\", \n                    \"Valence\", \n                    \"Tempo\", \n                    \"TimeSignature\"\n                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9\n                    ,$10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)";
-                    values = [
-                        track.id,
-                        track.name,
-                        track.popularity,
-                        track.duration_ms,
-                        track.explicit,
-                        track.release_year,
-                        track.release_month,
-                        track.release_day,
-                        track.danceability,
-                        track.energy,
-                        track.key,
-                        track.loudness,
-                        track.mode,
-                        track.speechiness,
-                        track.acousticness,
-                        track.instrumentalness,
-                        track.liveness,
-                        track.valence,
-                        track.tempo,
-                        track.time_signature
-                    ];
-                    //await client.query(query, values);
-                    mainInsertCount++;
-                    query = buildIntermediateInsert('TrackArtists', track.id, track.id_artists);
-                    if (!(query != '')) return [3 /*break*/, 5];
-                    return [4 /*yield*/, client.query(query)];
-                case 4:
-                    _a.sent();
-                    _a.label = 5;
-                case 5:
-                    _i++;
-                    return [3 /*break*/, 3];
-                case 6: return [3 /*break*/, 10];
-                case 7:
-                    err_2 = _a.sent();
+                    err_3 = _a.sent();
                     console.log('Err track: ', tracks[mainInsertCount]);
-                    console.error('Error inserting tracks:', err_2);
-                    return [3 /*break*/, 10];
-                case 8: return [4 /*yield*/, client.end()];
-                case 9:
+                    console.error('Error inserting tracks:', err_3);
+                    return [3 /*break*/, 6];
+                case 4: return [4 /*yield*/, client.end()];
+                case 5:
                     _a.sent();
                     return [7 /*endfinally*/];
-                case 10: return [2 /*return*/];
+                case 6: return [2 /*return*/];
             }
         });
     });
